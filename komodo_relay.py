@@ -53,43 +53,56 @@ def determine_container_status(container_name, event_status):
 
 # Format alert
 def format_alert(data):
-    alert_type = data.get("type", "Unknown")
-    target = data.get("target", {})
-    severity = data.get("severity", "INFO")
-    event_status = data.get("status", "Unknown")
+    # Extract field safely
+    alert_type = (
+        data.get("event")
+        or data.get("type")
+        or "Unknown"
+    )
+
+    severity = data.get("severity", "INFO").upper()
+    event_status = (
+        data.get("status")
+        or data.get("state")
+        or "Unknown"
+    )
     ts = data.get("timestamp") or data.get("time") or datetime.now().timestamp()
     parsed_time = parse_timestamp(ts)
 
-    if isinstance(target, dict):
-        target_name = target.get("name") or target.get("id") or "Unknown"
+    # Target info
+    container_info = data.get("container") or data.get("target") or {}
+    if isinstance(container_info, dict):
+        target_name = container_info.get("name") or container_info.get("id") or "Unknown"
     else:
-        target_name = str(target)
+        target_name = str(container_info)
 
+    # Source info (fallback ke variabel global)
+    source = data.get("source") or SOURCE_NAME or "Komodo Core"
+
+    # Tentukan status container
     if alert_type.lower() == "containerstatechange":
         status_label = determine_container_status(target_name, event_status)
     else:
         status_label = event_status.capitalize()
 
-    if severity.lower() == "critical":
-        icon = "🚨"
-    elif severity.lower() == "warning":
-        icon = "⚠️"
-    elif severity.lower() == "ok":
-        icon = "✅"
-    else:
-        icon = "ℹ️"
+    # Icon per severity
+    icon = {
+        "CRITICAL": "🚨",
+        "WARNING": "⚠️",
+        "OK": "✅",
+        "INFO": "ℹ️",
+    }.get(severity, "ℹ️")
 
-    # Format pesan
+    # Format message ke Telegram
     message = (
-        f"{icon} <b>Komodo Alert ({severity.upper()})</b>\n"
-        f" <b>Time:</b> {parsed_time}\n"
-        f" <b>Type:</b> {alert_type}\n"
-        f" <b>Target:</b> {target_name}\n"
-        f" <b>Status:</b> {status_label}\n"
-        f" <b>Source:</b> {SOURCE_NAME}"
+        f"{icon} <b>Komodo Alert ({alert_type})</b>\n"
+        f"🕒 <b>Time:</b> {parsed_time}\n"
+        f"📦 <b>Container:</b> {target_name}\n"
+        f"📉 <b>Status:</b> {status_label}\n"
+        f"🖥️ <b>Source:</b> {source}"
     )
 
-    print(f"[DEBUG] New Alert: {target_name} | Status: {status_label}")  # log tambahan
+    print(f"[DEBUG] Alert Parsed → {alert_type} | {target_name} | {status_label}")
     return message
 
 # Endpoint
